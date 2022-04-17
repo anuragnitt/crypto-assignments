@@ -93,19 +93,19 @@ AES::AES(void)
 
 bool PKCS7::check_padding(const void *buffer, uint32_t n_bytes, uint32_t block_size) const
 {
-    if (!buffer or (n_bytes == 0)) invalid_pad_exc();
+    if (!buffer or (n_bytes == 0)) return false;
 
-    if (n_bytes % block_size) return true;
+    if (n_bytes % block_size) return false;
 
     uint8_t *buffer_ = (uint8_t *)buffer;
     uint32_t pad_byte = buffer_[n_bytes - 1];
 
-    if (n_bytes <= pad_byte) return true;
+    if (n_bytes <= pad_byte) return false;
 
     for (uint32_t i = n_bytes - pad_byte; i < n_bytes; i++)
-        if (buffer_[i] != pad_byte) return true;
+        if (buffer_[i] != pad_byte) return false;
     
-    return false;
+    return true;
 }
 
 std::tuple<uint8_t *, uint32_t> PKCS7::pad(void *dest, const void *buffer, uint32_t n_bytes, uint32_t block_size) const
@@ -131,7 +131,7 @@ std::tuple<uint8_t *, uint32_t> PKCS7::pad(void *dest, const void *buffer, uint3
 
 std::tuple<uint8_t *, uint32_t> PKCS7::unpad(void *dest, const void *buffer, uint32_t n_bytes, uint32_t block_size) const
 {
-    if (this->check_padding(buffer, n_bytes, block_size)) invalid_pad_exc();
+    if (!this->check_padding(buffer, n_bytes, block_size)) invalid_pad_exc();
 
     const uint8_t *buffer_ = (const uint8_t *)buffer;
     uint32_t pad_byte = buffer_[n_bytes - 1];
@@ -181,7 +181,7 @@ void AES::rot_bytes(uint8_t *bytes, uint32_t n_bytes, uint32_t shift, bool inv) 
     shift = shift % n_bytes;
     if (shift == 0) return;
 
-    uint8_t *temp_buf = nullptr;
+    uint8_t *temp_buf = new uint8_t[2];
 
     if (
         (!inv and (shift <= (n_bytes >> 1))) or
@@ -189,7 +189,6 @@ void AES::rot_bytes(uint8_t *bytes, uint32_t n_bytes, uint32_t shift, bool inv) 
     )
     {
         if (inv) shift = n_bytes - shift;
-        temp_buf = new uint8_t[shift];
 
         std::memcpy((void *)temp_buf, (void *)bytes, shift);
         for (uint32_t i = 0; i < n_bytes - shift; i++)
@@ -199,7 +198,6 @@ void AES::rot_bytes(uint8_t *bytes, uint32_t n_bytes, uint32_t shift, bool inv) 
     else
     {
         if (!inv) shift = n_bytes - shift;
-        temp_buf = new uint8_t[shift];
 
         std::memcpy((void *)temp_buf, (void *)(bytes + n_bytes - shift), shift);
         for (uint32_t i = n_bytes - 1; i >= shift; i--)
@@ -343,8 +341,6 @@ void AES::add_round_key(const uint8_t *rkey, uint8_t* block) const
 void AES::rijndael(uint8_t *pt_block, const uint8_t *expanded_key, uint32_t exp_key_bytes) const
 {
     uint8_t *matrix = new uint8_t[this->block_size];
-    uint8_t *rkey = new uint8_t[this->block_size];
-
     uint32_t n_rounds = (exp_key_bytes >> 4) - 1;
 
     for (uint32_t i = 0; i < 4; i++)
@@ -352,6 +348,8 @@ void AES::rijndael(uint8_t *pt_block, const uint8_t *expanded_key, uint32_t exp_
         for (uint32_t j = 0; j < 4; j++)
             matrix[i + j*4] = pt_block[i*4 + j];
     }
+
+    uint8_t *rkey = new uint8_t[this->block_size];
 
     this->get_round_key(rkey, expanded_key, 0);
     this->add_round_key(rkey, matrix);
@@ -366,6 +364,8 @@ void AES::rijndael(uint8_t *pt_block, const uint8_t *expanded_key, uint32_t exp_
         this->add_round_key(rkey, matrix);
     }
 
+    delete[] rkey;
+
     for (uint32_t i = 0; i < 4; i++)
     {
         for (uint32_t j = 0; j < 4; j++)
@@ -373,13 +373,11 @@ void AES::rijndael(uint8_t *pt_block, const uint8_t *expanded_key, uint32_t exp_
     }
 
     delete[] matrix;
-    delete[] rkey;
 }
 
 void AES::inv_rijndael(uint8_t *ct_block, const uint8_t *expanded_key, uint32_t exp_key_bytes) const
 {
     uint8_t *matrix = new uint8_t[this->block_size];
-    uint8_t *rkey = new uint8_t[this->block_size];
 
     uint32_t n_rounds = (exp_key_bytes >> 4) - 1;
 
@@ -388,6 +386,8 @@ void AES::inv_rijndael(uint8_t *ct_block, const uint8_t *expanded_key, uint32_t 
         for (uint32_t j = 0; j < 4; j++)
             matrix[i + j*4] = ct_block[i*4 + j];
     }
+
+    uint8_t *rkey = new uint8_t[this->block_size];
 
     for (uint32_t round = 0; round < n_rounds; round++)
     {
@@ -402,13 +402,14 @@ void AES::inv_rijndael(uint8_t *ct_block, const uint8_t *expanded_key, uint32_t 
     this->get_round_key(rkey, expanded_key, 0);
     this->add_round_key(rkey, matrix);
 
+    delete[] rkey;
+
     for (uint32_t i = 0; i < 4; i++)
     {
         for (uint32_t j = 0; j < 4; j++)
             ct_block[i*4 + j] = matrix[i + j*4];
     }
 
-    delete[] rkey;
     delete[] matrix;
 }
 
@@ -435,6 +436,8 @@ std::tuple<uint8_t *, uint32_t> AES::encrypt(void *dest, const void *pt_buf, uin
 
     uint32_t n_blocks = pt_bytes / this->block_size;
     uint32_t n_rounds = (key_bytes >> 2) + 6;
+
+    std::cout << "\n";
 
     for (uint32_t i = 0; i < n_blocks; i++)
     {

@@ -49,15 +49,16 @@ void rsa_test(void)
     uint8_t *m = new uint8_t[6];
     m[0] = 65; m[1] = 110; m[2] = 117; m[3] = 114; m[4] = 97; m[5] = 103;
 
-    uint8_t *pt = m, *ct = m;
-    uint32_t ptb = sizeof(m) / sizeof(m[0]), ctb;
+    uint32_t n = 6;
 
-    std::tie(ct, ctb) = rsa.encrypt(m, m, ptb, pubkey);
-    std::tie(pt, ptb) = rsa.decrypt(m, ct, ctb, privkey);
+    std::tie(m, n) = rsa.encrypt(m, m, n, pubkey);
+    std::tie(m, n) = rsa.decrypt(m, m, n, privkey);
 
-    for (uint32_t i = 0; i < ptb; i++)
-        std::cout << (int)pt[i] << " ";
+    for (uint32_t i = 0; i < n; i++)
+        std::cout << (int)m[i] << " ";
     std::cout << "\n";
+
+    delete[] m;
 }
 
 int main(void)
@@ -67,3 +68,4 @@ int main(void)
 
     return 0;
 }
+
