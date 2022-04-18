@@ -25,17 +25,11 @@ class RSA
 {
     public:
 
-        void encrypt(mpz_t &, const mpz_t &, const PrivKey &) const;
         void encrypt(mpz_t &, const mpz_t &, const PubKey &) const;
-
         void decrypt(mpz_t &, const mpz_t &, const PrivKey &) const;
-        void decrypt(mpz_t &, const mpz_t &, const PubKey &) const;
 
-        std::tuple<uint8_t *, uint32_t> encrypt(void *, const void *, uint32_t, const PrivKey &) const;
         std::tuple<uint8_t *, uint32_t> encrypt(void *, const void *, uint32_t, const PubKey &) const;
-
         std::tuple<uint8_t *, uint32_t> decrypt(void *, const void *, uint32_t, const PrivKey &) const;
-        std::tuple<uint8_t *, uint32_t> decrypt(void *, const void *, uint32_t, const PubKey &) const;
 };
 
 class PrivKey
@@ -77,19 +71,19 @@ PrivKey::PrivKey(void)
     std::srand((uint32_t)std::time(nullptr));
 
     mpz_init(this->p);
-    mpz_set_str(this->p, "0", 10);
+    mpz_set_ui(this->p, 0);
 
     mpz_init(this->q);
-    mpz_set_str(this->q, "0", 10);
+    mpz_set_ui(this->q, 0);
 
     mpz_init(this->d);
-    mpz_set_str(this->d, "0", 10);
+    mpz_set_ui(this->d, 0);
 
     mpz_init(this->n);
-    mpz_set_str(this->n, "0", 10);
+    mpz_set_ui(this->n, 0);
 
     mpz_init(this->e);
-    mpz_set_str(this->e, "65537", 10);
+    mpz_set_ui(this->e, 65537);
 }
 
 PrivKey::~PrivKey()
@@ -156,10 +150,10 @@ void PrivKey::random(const uint32_t p_bits, const uint32_t q_bits)
 PubKey::PubKey(void)
 {
     mpz_init(this->n);
-    mpz_set_str(this->n, "0", 10);
+    mpz_set_ui(this->n, 0);
 
     mpz_init(this->e);
-    mpz_set_str(this->e, "65537", 10);
+    mpz_set_ui(this->e, 65537);
 }
 
 PubKey::PubKey(const PrivKey &key)
@@ -168,7 +162,7 @@ PubKey::PubKey(const PrivKey &key)
     mpz_mul(this->n, key.p, key.q);
 
     mpz_init(this->e);
-    mpz_set_str(this->e, "65537", 10);
+    mpz_set_ui(this->e, 65537);
 }
 
 PubKey::~PubKey()
@@ -180,13 +174,6 @@ PubKey::~PubKey()
 void PubKey::construct(const PrivKey &key)
 {
     mpz_mul(this->n, key.p, key.q);
-}
-
-void RSA::encrypt(mpz_t &ct, const mpz_t &pt, const PrivKey &key) const
-{
-    if (mpz_cmp(pt, key.n) >= 0) invalid_pt_exc();
-
-    mpz_powm(ct, pt, key.d, key.n);
 }
 
 void RSA::encrypt(mpz_t &ct, const mpz_t &pt, const PubKey &key) const
@@ -203,49 +190,6 @@ void RSA::decrypt(mpz_t &pt, const mpz_t &ct, const PrivKey &key) const
     mpz_powm(pt, ct, key.d, key.n);
 }
 
-void RSA::decrypt(mpz_t &pt, const mpz_t &ct, const PubKey &key) const
-{
-    if (mpz_cmp(ct, key.n) >= 0) invalid_ct_exc();
-
-    mpz_powm(pt, ct, key.e, key.n);
-}
-
-std::tuple<uint8_t *, uint32_t> RSA::encrypt(void *dest, const void *ptbuf, uint32_t n_bytes, const PrivKey &key) const
-{
-    const uint8_t *ptbuf_ = (const uint8_t*)ptbuf;
-
-    mpz_t pt; mpz_init(pt);
-    mpz_t ct; mpz_init(ct);
-
-    if (ptbuf) mpz_import(pt, n_bytes, 1, sizeof(ptbuf_[0]), 0, 0, ptbuf_);
-    else mpz_set_str(pt, "0", 10);
-
-    try
-    {
-        this->encrypt(ct, pt, key);
-    }
-    catch (const std::exception &exc)
-    {
-        mpz_clear(pt);
-        mpz_clear(ct);
-
-        throw exc;
-    }
-
-    uint32_t numb = sizeof(ptbuf_[0]) << 3;
-    uint32_t ct_n_bytes = (mpz_sizeinbase(ct, 2) + numb - 1) / numb;
-
-    if (dest) dest = std::realloc(dest, ct_n_bytes);
-    else dest = std::malloc(ct_n_bytes);
-
-    mpz_export(dest, nullptr, 1, sizeof(ptbuf_[0]), 1, 0, ct);
-
-    mpz_clear(pt);
-    mpz_clear(ct);
-
-    return std::tuple<uint8_t *, uint32_t>((uint8_t *)dest, ct_n_bytes);
-}
-
 std::tuple<uint8_t *, uint32_t> RSA::encrypt(void *dest, const void *ptbuf, uint32_t n_bytes, const PubKey &key) const
 {
     const uint8_t *ptbuf_ = (const uint8_t*)ptbuf;
@@ -254,7 +198,7 @@ std::tuple<uint8_t *, uint32_t> RSA::encrypt(void *dest, const void *ptbuf, uint
     mpz_t ct; mpz_init(ct);
 
     if (ptbuf) mpz_import(pt, n_bytes, 1, sizeof(ptbuf_[0]), 0, 0, ptbuf_);
-    else mpz_set_str(pt, "0", 10);
+    else mpz_set_ui(pt, 0);
 
     try
     {
@@ -290,43 +234,7 @@ std::tuple<uint8_t *, uint32_t> RSA::decrypt(void *dest, const void *ctbuf, uint
     mpz_t pt; mpz_init(pt);
 
     if (ctbuf) mpz_import(ct, n_bytes, 1, sizeof(ctbuf_[0]), 0, 0, ctbuf_);
-    else mpz_set_str(ct, "0", 10);
-
-    try
-    {
-        this->decrypt(pt, ct, key);
-    }
-    catch (const std::exception &exc)
-    {
-        mpz_clear(ct);
-        mpz_clear(pt);
-
-        throw exc;
-    }
-
-    uint32_t numb = sizeof(ctbuf_[0]) << 3;
-    uint32_t pt_n_bytes = (mpz_sizeinbase(pt, 2) + numb - 1) / numb;
-
-    if (dest) dest = std::realloc(dest, pt_n_bytes);
-    else dest = std::malloc(pt_n_bytes);
-
-    mpz_export(dest, nullptr, 1, sizeof(ctbuf_[0]), 1, 0, pt);
-
-    mpz_clear(pt);
-    mpz_clear(ct);
-
-    return std::tuple<uint8_t *, uint32_t>((uint8_t *)dest, pt_n_bytes);
-}
-
-std::tuple<uint8_t *, uint32_t> RSA::decrypt(void *dest, const void *ctbuf, uint32_t n_bytes, const PubKey &key) const
-{
-    const uint8_t *ctbuf_ = (const uint8_t*)ctbuf;
-
-    mpz_t ct; mpz_init(ct);
-    mpz_t pt; mpz_init(pt);
-
-    if (ctbuf) mpz_import(ct, n_bytes, 1, sizeof(ctbuf_[0]), 0, 0, ctbuf_);
-    else mpz_set_str(ct, "0", 10);
+    else mpz_set_ui(ct, 0);
 
     try
     {
